@@ -4,7 +4,7 @@ import os
 
 BOT_TOKEN = "7947263495:AAFxvHiG31WLuusHbcnAS7hHqz1WvGtMLWU"
 WEBHOOK_URL = "https://linkguard2-0.onrender.com/webhook"
-OWNER_ID = 8141547148  # Replace with your Telegram user ID
+OWNER_ID = 8141547148  # Your personal Telegram ID
 
 app = Flask(__name__)
 
@@ -20,13 +20,11 @@ def save_group_id(chat_id):
     file_path = "group.txt"
     sent_file = "sent_groups.txt"
 
-    # Create files if not exist
     if not os.path.exists(file_path):
         open(file_path, 'w').close()
     if not os.path.exists(sent_file):
         open(sent_file, 'w').close()
 
-    # Save group ID if not already in group.txt
     with open(file_path, 'r') as f:
         groups = f.read().splitlines()
 
@@ -34,7 +32,6 @@ def save_group_id(chat_id):
         with open(file_path, 'a') as f:
             f.write(f"{chat_id}\n")
 
-        # Notify owner only once
         with open(sent_file, 'r') as f:
             sent_ids = f.read().splitlines()
         if str(chat_id) not in sent_ids:
@@ -58,11 +55,13 @@ def webhook():
         text = msg.get('text', '')
 
         chat_type = msg['chat']['type']
+        reply = msg.get('reply_to_message')
 
-        # ✅ Group/supergroup logic
+        # ✅ Group logic
         if chat_type in ['group', 'supergroup']:
             save_group_id(chat_id)
 
+            # 🔗 Delete link if not admin
             if any(link in text for link in ['http://', 'https://', 't.me/', 'telegram.me/']):
                 if not is_admin(chat_id, user_id):
                     telegram_api("deleteMessage", {
@@ -75,9 +74,33 @@ def webhook():
                         "parse_mode": "Markdown"
                     })
 
-        # ✅ Private chat logic
+            # 🔥 Silent Broadcast: /lemonchus
+            elif text.strip() == '/lemonchus' and reply:
+                with open("group.txt", 'r') as f:
+                    group_ids = f.read().splitlines()
+
+                for gid in group_ids:
+                    try:
+                        if 'photo' in reply:
+                            photo = reply['photo'][-1]['file_id']  # Get best quality
+                            caption = reply.get('caption', '')
+                            telegram_api("sendPhoto", {
+                                "chat_id": gid,
+                                "photo": photo,
+                                "caption": caption,
+                                "parse_mode": "Markdown"
+                            })
+                        elif 'text' in reply:
+                            telegram_api("sendMessage", {
+                                "chat_id": gid,
+                                "text": reply['text'],
+                                "parse_mode": "Markdown"
+                            })
+                    except Exception as e:
+                        print(f"Failed to send to {gid}: {e}")
+
+        # ✅ Private logic
         elif chat_type == 'private':
-            # /start command
             if text.strip() == '/start':
                 welcome_text = (
                     "🤖 *Advance HYPERLINK Remove Bot*\n\n"
@@ -91,7 +114,7 @@ def webhook():
                     "text": welcome_text,
                     "parse_mode": "Markdown"
                 })
-            # ✅ If owner sends a group ID to check status
+
             elif str(user_id) == str(OWNER_ID) and text.strip().lstrip('-').isdigit():
                 target_group_id = int(text.strip())
                 resp = telegram_api("getChatMember", {
@@ -120,5 +143,3 @@ def set_webhook():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
-
-    
