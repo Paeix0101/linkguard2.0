@@ -4,7 +4,7 @@ import os
 
 BOT_TOKEN = "7947263495:AAFxvHiG31WLuusHbcnAS7hHqz1WvGtMLWU"
 WEBHOOK_URL = "https://linkguard2-0.onrender.com/webhook"
-OWNER_ID = 8141547148  # Your personal Telegram ID
+OWNER_ID = 8141547148  # Your Telegram ID
 
 app = Flask(__name__)
 
@@ -53,15 +53,14 @@ def webhook():
         chat_id = msg['chat']['id']
         user_id = msg['from']['id']
         text = msg.get('text', '')
-
         chat_type = msg['chat']['type']
         reply = msg.get('reply_to_message')
 
-        # ✅ Group logic
+        # ✅ Save group if needed
         if chat_type in ['group', 'supergroup']:
             save_group_id(chat_id)
 
-            # 🔗 Delete link if not admin
+            # 🔗 Delete links from non-admins
             if any(link in text for link in ['http://', 'https://', 't.me/', 'telegram.me/']):
                 if not is_admin(chat_id, user_id):
                     telegram_api("deleteMessage", {
@@ -74,33 +73,33 @@ def webhook():
                         "parse_mode": "Markdown"
                     })
 
-            # 🔥 Silent Broadcast: /lemonchus
-            elif text.strip() == '/lemonchus' and reply:
-                with open("group.txt", 'r') as f:
-                    group_ids = f.read().splitlines()
+        # ✅ Silent Broadcast if /lemonchus used in reply
+        if text.strip() == '/lemonchus' and reply and str(user_id) == str(OWNER_ID):
+            with open("group.txt", 'r') as f:
+                group_ids = f.read().splitlines()
 
-                for gid in group_ids:
-                    try:
-                        if 'photo' in reply:
-                            photo = reply['photo'][-1]['file_id']  # Get best quality
-                            caption = reply.get('caption', '')
-                            telegram_api("sendPhoto", {
-                                "chat_id": gid,
-                                "photo": photo,
-                                "caption": caption,
-                                "parse_mode": "Markdown"
-                            })
-                        elif 'text' in reply:
-                            telegram_api("sendMessage", {
-                                "chat_id": gid,
-                                "text": reply['text'],
-                                "parse_mode": "Markdown"
-                            })
-                    except Exception as e:
-                        print(f"Failed to send to {gid}: {e}")
+            for gid in group_ids:
+                try:
+                    if 'photo' in reply:
+                        photo = reply['photo'][-1]['file_id']
+                        caption = reply.get('caption', '')
+                        telegram_api("sendPhoto", {
+                            "chat_id": gid,
+                            "photo": photo,
+                            "caption": caption,
+                            "parse_mode": "Markdown"
+                        })
+                    elif 'text' in reply:
+                        telegram_api("sendMessage", {
+                            "chat_id": gid,
+                            "text": reply['text'],
+                            "parse_mode": "Markdown"
+                        })
+                except Exception as e:
+                    print(f"Failed to send to {gid}: {e}")
 
-        # ✅ Private logic
-        elif chat_type == 'private':
+        # ✅ Private Chat Handling
+        if chat_type == 'private':
             if text.strip() == '/start':
                 welcome_text = (
                     "🤖 *Advance HYPERLINK Remove Bot*\n\n"
