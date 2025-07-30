@@ -26,7 +26,25 @@ def webhook():
         user_id = msg['from']['id']
         text = msg.get('text', '')
 
-        if msg['chat']['type'] in ['group', 'supergroup']:
+        chat_type = msg['chat']['type']
+
+        # ✅ Handle private chat /start command
+        if chat_type == 'private' and text.strip() == '/start':
+            welcome_text = (
+                "🤖 *Advance HYPERLINK Remove Bot*\n\n"
+                "🛡️ Give *admin* rights to this bot in your group\n\n"
+                "✨ *Features:*\n"
+                "1️⃣ Deletes links sent by members in groups 🔗❌\n"
+                "2️⃣ Does *not* delete links sent by *admins* 👮✅\n"
+            )
+            telegram_api("sendMessage", {
+                "chat_id": chat_id,
+                "text": welcome_text,
+                "parse_mode": "Markdown"
+            })
+
+        # ✅ Handle link deletion in group
+        elif chat_type in ['group', 'supergroup']:
             if any(link in text for link in ['http://', 'https://', 't.me/', 'telegram.me/']):
                 if not is_admin(chat_id, user_id):
                     telegram_api("deleteMessage", {
@@ -35,8 +53,10 @@ def webhook():
                     })
                     telegram_api("sendMessage", {
                         "chat_id": chat_id,
-                        "text": "Warning⚠️ \nLinks is not allowed in this group"
+                        "text": "⚠️ *Warning*\nLinks are not allowed in this group.",
+                        "parse_mode": "Markdown"
                     })
+
     return "OK"
 
 @app.route('/', methods=['GET'])
