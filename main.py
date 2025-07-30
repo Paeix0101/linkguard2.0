@@ -4,7 +4,7 @@ import os
 
 BOT_TOKEN = "7947263495:AAFxvHiG31WLuusHbcnAS7hHqz1WvGtMLWU"
 WEBHOOK_URL = "https://linkguard2-0.onrender.com/webhook"
-OWNER_ID = 8141547148  # Your Telegram ID
+OWNER_ID = 8141547148  # Replace with your Telegram user ID
 
 app = Flask(__name__)
 
@@ -20,11 +20,13 @@ def save_group_id(chat_id):
     file_path = "group.txt"
     sent_file = "sent_groups.txt"
 
+    # Create files if not exist
     if not os.path.exists(file_path):
         open(file_path, 'w').close()
     if not os.path.exists(sent_file):
         open(sent_file, 'w').close()
 
+    # Save group ID if not already in group.txt
     with open(file_path, 'r') as f:
         groups = f.read().splitlines()
 
@@ -32,12 +34,13 @@ def save_group_id(chat_id):
         with open(file_path, 'a') as f:
             f.write(f"{chat_id}\n")
 
+        # Notify owner only once
         with open(sent_file, 'r') as f:
             sent_ids = f.read().splitlines()
         if str(chat_id) not in sent_ids:
             telegram_api("sendMessage", {
                 "chat_id": OWNER_ID,
-                "text": f"📢 Bot added to new group:\n`{chat_id}`",
+                "text": f"📢 Bot added to new group:\n{chat_id}",
                 "parse_mode": "Markdown"
             })
             with open(sent_file, 'a') as f:
@@ -56,11 +59,10 @@ def webhook():
         chat_type = msg['chat']['type']
         reply = msg.get('reply_to_message')
 
-        # ✅ Save group if needed
+        # ✅ Group/supergroup logic
         if chat_type in ['group', 'supergroup']:
             save_group_id(chat_id)
 
-            # 🔗 Delete links from non-admins
             if any(link in text for link in ['http://', 'https://', 't.me/', 'telegram.me/']):
                 if not is_admin(chat_id, user_id):
                     telegram_api("deleteMessage", {
@@ -73,33 +75,9 @@ def webhook():
                         "parse_mode": "Markdown"
                     })
 
-        # ✅ Silent Broadcast if /lemonchus used in reply
-        if text.strip() == '/lemonchus' and reply and str(user_id) == str(OWNER_ID):
-            with open("group.txt", 'r') as f:
-                group_ids = f.read().splitlines()
-
-            for gid in group_ids:
-                try:
-                    if 'photo' in reply:
-                        photo = reply['photo'][-1]['file_id']
-                        caption = reply.get('caption', '')
-                        telegram_api("sendPhoto", {
-                            "chat_id": gid,
-                            "photo": photo,
-                            "caption": caption,
-                            "parse_mode": "Markdown"
-                        })
-                    elif 'text' in reply:
-                        telegram_api("sendMessage", {
-                            "chat_id": gid,
-                            "text": reply['text'],
-                            "parse_mode": "Markdown"
-                        })
-                except Exception as e:
-                    print(f"Failed to send to {gid}: {e}")
-
-        # ✅ Private Chat Handling
-        if chat_type == 'private':
+        # ✅ Private chat logic
+        elif chat_type == 'private':
+            # /start command
             if text.strip() == '/start':
                 welcome_text = (
                     "🤖 *Advance HYPERLINK Remove Bot*\n\n"
@@ -114,6 +92,7 @@ def webhook():
                     "parse_mode": "Markdown"
                 })
 
+            # ✅ Owner sends group ID to check status
             elif str(user_id) == str(OWNER_ID) and text.strip().lstrip('-').isdigit():
                 target_group_id = int(text.strip())
                 resp = telegram_api("getChatMember", {
@@ -133,6 +112,34 @@ def webhook():
                         "text": "⚠️ Bot is *not active* or doesn't have admin rights in that group.",
                         "parse_mode": "Markdown"
                     })
+
+            # ✅ /lemonchus command to silently broadcast to all groups (image or text reply)
+            elif text.strip() == '/lemonchus' and reply:
+                if str(user_id) != str(OWNER_ID):
+                    return "OK"  # Only owner can broadcast
+
+                with open("group.txt", 'r') as f:
+                    group_ids = f.read().splitlines()
+
+                for gid in group_ids:
+                    try:
+                        if 'photo' in reply:
+                            file_id = reply['photo'][-1]['file_id']
+                            caption = reply.get('caption', '')
+                            telegram_api("sendPhoto", {
+                                "chat_id": gid,
+                                "photo": file_id,
+                                "caption": caption,
+                                "parse_mode": "Markdown"
+                            })
+                        elif 'text' in reply:
+                            telegram_api("sendMessage", {
+                                "chat_id": gid,
+                                "text": reply['text'],
+                                "parse_mode": "Markdown"
+                            })
+                    except Exception as e:
+                        print(f"Failed to send to {gid}: {e}")
 
     return "OK"
 
